@@ -1,0 +1,337 @@
+---
+title: "Do Stats Make Competitive Pokemon?"
+output:
+  html_document: default
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+options(tinytex.verbose = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(stringr)
+library(rvest)
+library(httr)
+library(dplyr)
+library(AICcmodavg)
+library(gridExtra)
+library(cowplot)
+```
+
+
+
+```{r, echo = FALSE, message=FALSE, warning=FALSE}
+dex <- read_csv("~/Downloads/aengus_pokedex.csv")
+
+dex <- dex %>%
+  mutate(genno = as.factor(genno))
+```
+
+
+
+```{r, echo = FALSE}
+# Define variable containing url
+url <- "https://static3.srcdn.com/wordpress/wp-content/uploads/2020/09/Pokemon-Go-Lotad.jpg?q=50&fit=crop&w=943&h=500&dpr=1.5"
+## Some lotad!
+```
+
+![Lotad is my favorite](`r url`)
+
+# Preamble
+
+This research focuses on something dear to most people under 30's hearts: Pokemon. First and foremost, let's talk about what exactly Pokemon is. Pokemon is a game, where you capture and battle with Pokemon, who come with an assortment of types, abilities, moves, and stats. Let's look at an example of a Pokemon from our data:
+
+```{r,echo=FALSE}
+dex[270,] 
+```
+This is our first Pokemon, Lotad: We can see it's stats above. The dexno is its number in the pokedex, the list that compiles all Pokemon. Its dexno is 270, meaning it hold the 270th position in the pokedex. Next, we see its ability, which is a special trait that has an impact in game - we won't look at this at all, but it will affect a Pokemon's strength. The next 5 numbers are its stats. HP is hitpoints, how much "life" it has. Atk is how it attacks using physical moves. Def is its defense against phsycial moves. SAtk and SDef are the special counterparts to these stats. lastly, Spd is how fast a Pokemon is. This decides turn order. We also have generation - which set of games the Pokemon came out in. Not all 898 Pokemon came out at once. 
+
+### disclaimer: I scraped this data myself, and it is subpar :( please excuse any funky stuff going on that is unaddressed, especially abilities! I had a hard time parsing them.
+
+So, if we are looking only at stats of Pokemon, as we are, we would think that we would want the highest stats. If my Pokemon does more damage to yours, then I win. So, based off of that, we would think that the best players would use the strongest Pokemon, right? I used [Smogon's Usage Statistics](https://www.smogon.com/stats/), which detail which Pokemon competitive Pokemon players use. Sadly, the highest strongest Pokemon stats wise was not the most used. So, here's our research questions.
+
+## 1) What does our favorite Pokemon's usage look like?
+## 2) We know our Pokemon's usage, can we find Pokemon with similar strength?
+## 3) Are newer Pokemon better competitvely?
+
+For our second question, we finally get to what the usage data is. The usage rates are for "OU" (overused) Pokemon, but that doesn't really explain what's going on. A Pokemon "starts" its journey in the OU tier, where then it's usage in that tier decides which tier it actually ends up in. There are a bunch of tiers, but this research basically boils it down to untiered and OU. The tiering system was created to allow for weak Pokemon to be used competitively without being an absolute liability in the match. As such, we have a lot of Pokemon with very low usage, which causes us to have to use a nifty trick on the data in order for us to get an answer for our second question.
+
+
+
+# Varaibles
+
+We've already gone over most of the variables, so we'll just cover the "meta" stats here, which refer to usage and transformations on base stats. 
+
+-bst: Base Stat Total. This is the additon of a Pokemon's stats. Lotad's bst, for instance, is 220, about half of the average bst. There's no units on this.
+
+
+-Rate: this is the usage rate. This cannot be over 100 because it is a percentage. For ease of reading, .2 is 20 percent, but here we will call 20 percent 20.
+
+
+-Real: this is the number of battles a Pokemon has been brought to. It is a transformation of Rate.
+
+
+-genno: this is the generation number, but as a factor. This was something I worked with and isn't too helpful, since it is just generation as a factor.
+
+# Each Generation's bst Distribution
+
+```{r fig.align="center", echo = FALSE, message=FALSE}
+
+ggplot(data = dex, mapping = aes(dexno, bst, color = genno)) +
+  geom_point() +
+  ggtitle("bst vs dexno, colored by generation") +
+  labs(y = "Base Stat Total", x = "Pokedex Number")
+
+```
+
+
+
+We can't glean a whole bunch of information in this plot, but we can tell a few things here that we can't in the next plot. First, we can see that some generations are "thin," while others are not. Our points are colored by which generation they belong to. So, lets look at generation 1. It is pretty wide, about twice as wide as generation 7. The range of the points on the x axis relate to the number of Pokemon introduced. We see that generations 1 and 5 have the most Pokemon added, so we'll remember to keep an eye on them for later. Next, we see that there are few Pokemon over 600 bst; those are legendary Pokemon, and often times they are banned from OU for being unfair, meaning they would have a very high usage rate. However, they aren't *always* banned, so later on when we are talking conclusions, they'll come up again. There are also a few Pokemon at 600, who aren't legendary but are strong, and they'll be a big part of this project going forwards.
+
+
+```{r, fig.align="center",echo=FALSE, message=FALSE}
+dex %>%
+  ggplot(mapping = aes(dexno, bst,group = genno, fill = genno)) +
+  geom_violin() +
+  geom_jitter(size =.1) +
+  ggtitle("bst vs dexno, colored by generation") +
+  labs(y = "Base Stat Total", x = "Pokedex Number")
+```
+
+Here, we see a similar idea as the last, but in a violin plot (even the colors are the same!). This is a nice complementary plot because we get to see the distribution of base stat total in each generation and put that into conversation with the other generations. We can see a general trend, where the top is super skinny, the ~75th quartile being the widest part of the distribution, the ~50th quartile and the ~25th quartile being a little less wider, and then the bottom being skinny. These plots represent total number through, not percentage! Because of this we cannot take the plot completely at face value. We see than gens 1 and 5 have some pretty similar distributions, except that gen 5 doesn't go anywhere near as low as the rest of them! Interestingly enough, gen 5 is known as when excessive "power creep" began, which is where there are lots of strong Pokemon, so the weak ones get phased out of competitive play. We also see that generation 2 has a disproportionate amount of good Pokemon, and generation 7 takes that feeling to the next level. In Generation 6, the game started to reuse the bad Pokemon, opting to forgo creating more bad ones. Look in the appendix for the actual base stat total distributions.
+
+
+
+# Before Generation 6 and After Generation 6
+
+For these next two plots, we logged the Rate variable, allowing us to make a linear regression. Because of this transformation, we had to exclude Pokemon with 0 usage, which happens to be the abysmally weak and the exceedingly strong. The overly strong ones are banned due to being unfair, as previously mentioned, and they cause a little curving in our LOB. If these strong pokemon were not banned, we'd probably see a straighter, positive line, meaning that as bst increases, log(rate) does as well. Or, for easier reading, as as rate increases, bst increases, but at a progressively slower rate. 
+
+
+```{r, fig.align="center", echo=FALSE, message=FALSE}
+
+
+
+logdex <- dex %>% # Rate = 0 gives -inf when logged: exclude these if we have to log
+  filter(Rate > 0)
+
+lR1 <-dex %>%
+  filter(Rate >0 & generation < 6) %>%
+  ggplot(mapping = aes(log(Rate), bst)) +
+  geom_point(aes(color = genno)) +
+  geom_smooth(se = FALSE)+
+  ylim(0,750) +
+  xlim(-9,4) + # data is not normal - must log 
+  labs(title = "Base Stat Total Vs log(rate) Before Generation 6")
+
+lR2 <-dex %>%
+  filter(Rate >0 & generation > 5) %>%
+ggplot(mapping = aes(log(Rate), bst)) +
+  geom_point(aes(color = genno)) +
+  geom_smooth(se = FALSE) +
+  ylim(0,750) +
+  xlim(-9,4) +# data is not normal - must log
+  labs(title = "Base Stat Total Vs log(rate) After Generation 6")
+grid.arrange(lR1,lR2)
+
+```
+
+Here, we see the two different groups (before and after gen 6) being compared, and we see pretty much the same thing. However, we see a slight difference at about log(rate) = -5: before generation 6, Pokemon with this base stat total (on average!) were used less than they were after generation 6. Does this mean that worse Pokemon were more competitively viable? No. Look around bst = 600, and we see a LOT of bst ~600 with a low usage rate, compared to where we would expect to see them (high usage). Our conclusion from these plots is actually that good Pokemon were LESS viable than before, meaning that the competitive scene was far more difficult, and that you'd need to use certain Pokemon in order to be competitive.
+
+```{r, fig.align="center", echo=FALSE, message=FALSE}
+
+logdex %>%
+  group_by(generation) %>%
+  ggplot(mapping = aes(log(Rate), bst)) +
+  geom_point(aes(color = genno)) +
+  geom_smooth(se = FALSE)+
+  ylim(0,750) +
+  xlim(-9,4) +
+    facet_grid(facets = logdex$generation) + # data is not normal - must log
+  labs(title = "Base Stat Total Vs log(rate) in Each Generation")
+```
+
+This is a plot with each generation separated so that we can look how each one preforms competitively. The right the line goes, the better the generation (or just the top end) is.
+
+
+## Modeling
+
+I made a couple models, but just tested generation and bst as variables, to predict a Pokemons usage if we know its bst.
+
+```{r,echo=FALSE, message=FALSE}
+
+library(car)
+
+model_nested<-lm(log(Rate) ~ bst, data = logdex)
+model_full <-lm(log(Rate) ~ bst + generation, data = logdex)
+summary(model_nested)
+
+summary(model_full) #had a lower aic and higher adj r squared in comp to model1, so we we use this one
+
+anova(model_full,model_nested) # using a hyp test to show full is better
+```
+### nested model
+We'll take all of this output and talk about it one by one. So, our first output, for the nested model: we have coefficient for bst $\beta_1 = .0207$, which means that for each bst point we add, the log(rate) will go up .00207. We've got a really small p-value, meaning that this coefficient is statistically significant, and we should trust it. Next, we see the R-Squared being .6196, meaning that bst can only account for about 62% of our data, or that we have a decent predictor, but nothing to write home about. We are missing information to help us predict, most likely ability information.
+
+### full model
+
+On our full model, we have that our coefficient for for bst is $\beta_2 = .02095$, meaning that for every point our bst increases, the log(rate) will go up by .02095. Again, we've got a very small p-value, so we can trust to keep this coefficient/variable in the model. Next, we have the coefficient for generation, $\beta_3 = -.1052$, meaning that for each newer generation, the log(rate) actually gets lower. Holding bst constant, it means that older Pokemon of the same strength are better. Lastly, our R-Squared is .6275, meaning that almost 63% of our data is accounted for, again making it a decent predictor. We now also have an Adjusted R-Squared, which tells us the quality of the variables we added; since the adjusted is lower than the regular r-squared, the variable was not great. However, the second model has a higher regualr/adjusted R-Squared, so we'll just use that one for predicting. Again, this would be better if we had more information, namely ability.
+
+## ANOVA test
+
+Here, we tested the two models against each other, and assumed that they predict equally as well. We ran a hypothesis test using this, and found (with a low p-value) that we should definetly use the full model, as opposed to the nested version.
+
+## Visualization of Our Full Model
+
+This has a big drop at the start because using bad Pokemon is a gimmick, but it's funny if you win with them, so people use them. It's not that these Pokemon are good, but they are popular. Further, we see that the strongest Pokemon is used as much as a bst 500 Pokemon, meaning there's something besides bst that matters.
+```{r,echo=FALSE, message=FALSE}
+logdex %>%
+ggplot(mapping = aes(x = bst, y = log(Rate))) +
+  geom_point()+
+  geom_smooth() 
+
+avPlots(model_full) 
+```
+
+## Another Way to See the Effect of Variables
+
+In the plots above, we have a comparison that is pretty interesting. The plots show that if we hold all variables except for the one on the bottom constant, how the log(rate) will change. In a simpler sense, it allows us to compare Pokemon of either the same generation (left) or the same bst (right) to each other. For example, if the Pokemon are from generation 1, but have different bsts, we can see that the one with the higher bst will have a higher usage rate. In the other plot (right), if the Pokemon have the same bst but different generations, the one that was earlier will be better!
+
+
+
+
+
+# APPENDIX
+
+```{r fig.align="center", echo=FALSE, message=FALSE}
+# checking model assumptions
+par(mfrow=c(2,2))
+summary(model_full)
+summary(model_nested)
+plot(model_full)
+plot(model_nested)
+
+print(table1) # mean and sd of bst each generation: m1/sd1 is gen 1, m2/sd2 is gen 2, and so on
+
+plot_grid(lR1,lR2,labels = c("Before Regional Forms", "After Regional Forms")) # alt plot for above, easier to see trends but may be misleading
+
+
+
+
+dex1 <- dex %>%
+  filter(genno == 1)
+
+m1 <- mean(dex1$bst)
+sd1 <- sd(dex1$bst)
+
+x1 = seq(0,900, length = 200)
+hx1 <- dnorm(x1,m1,sd1)
+t1 <- tibble(x1,hx1)
+
+dex2 <- dex %>%
+  filter(genno == 2)
+
+
+
+m2 <- mean(dex2$bst)
+sd2 <- sd(dex2$bst)
+
+x2 = seq(0,900, length = 200)
+hx2 <- dnorm(x2,m2,sd2)
+t2 <- tibble(x2,hx2)
+
+
+
+dex3 <- dex %>%
+  filter(genno == 3)
+
+m3 <- mean(dex3$bst)
+sd3 <- sd(dex3$bst)
+
+x3 = seq(0,800, length = 200)
+hx3 <- dnorm(x3,m3,sd3)
+t3 <- tibble(x3,hx3)
+
+
+
+dex4 <- dex %>%
+  filter(genno == 4)
+
+m4 <- mean(dex4$bst)
+sd4 <- sd(dex4$bst)
+
+x4 = seq(0,900, length = 200)
+hx4 <- dnorm(x4,m4,sd4)
+t4 <- tibble(x4,hx4)
+
+
+
+dex5 <- dex %>%
+  filter(genno == 5)
+
+m5 <- mean(dex5$bst)
+sd5 <- sd(dex5$bst)
+
+x5 = seq(0,900, length = 200)
+hx5 <- dnorm(x5,m5,sd5)
+t5 <- tibble(x5,hx5)
+
+
+
+dex6 <- dex %>%
+  filter(genno == 6)
+
+m6 <- mean(dex6$bst)
+sd6 <- sd(dex6$bst)
+
+x6 = seq(0,900, length = 200)
+hx6 <- dnorm(x6,m6,sd6)
+t6 <- tibble(x6,hx6)
+
+
+
+dex7 <- dex %>%
+  filter(genno == 7)
+
+m7 <- mean(dex7$bst)
+sd7 <- sd(dex7$bst)
+
+x7 = seq(0,900, length = 200)
+hx7 <- dnorm(x7,m7,sd7)
+t7 <- tibble(x7,hx7)
+
+
+
+dex8 <- dex %>%
+  filter(genno == 8)
+
+m8 <- mean(dex8$bst)
+sd8 <- sd(dex8$bst)
+
+x8 = seq(0,900, length = 200)
+hx8 <- dnorm(x8,m8,sd8)
+t8 <- tibble(x8,hx8)
+
+normaltib <- tibble(x1,hx1,hx2,hx3,hx4,hx5,hx6,hx7,hx8)
+
+# all of the following are the distributions of bst in each gen
+
+hist(dex1$bst)
+hist(dex2$bst)
+hist(dex3$bst)
+hist(dex4$bst)
+hist(dex5$bst)
+hist(dex6$bst)
+hist(dex7$bst) #only one that isn't aprrox bimodal
+hist(dex8$bst)
+```
+
+
+
