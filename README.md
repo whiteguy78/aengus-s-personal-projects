@@ -1,2 +1,2 @@
 # aengus-s-personal-projects
-personal projects, hopefully completed
+this is a collection of ... 'work' that I've done in the past. Most of this was done in college, and the bar was low! If you see anything and think, 'wow, this is almost kinda good,' then you've found a piece of my unemployed college graduate portfolio. If you see anything that is _actually_ presentable, then it is part of my modern self's body of work (2025). I'll add stuff in here as it comes along! I feel like there's not much value in a coding portfolio because of how trivialized coding is in 2025 with generative ai. I'd love to leave my professional work here, but I'd much rather have a job than a cool portfolio lol
